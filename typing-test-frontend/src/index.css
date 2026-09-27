@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-bgPrimary text-textPrimary antialiased font-sans min-h-screen selection:bg-accent/30 selection:text-white;
+  }
+}
+
+@layer utilities {
+  .typing-area {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 1.5rem;
+    line-height: 2.2;
+    letter-spacing: 0.03em;
+  }
+  
+  .word {
+    position: relative;
+    display: inline-flex;
+    margin-right: 0.75rem;
+    margin-bottom: 0.25rem;
+    padding: 0 2px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+  }
+
+  .word.current {
+    background: rgba(99, 102, 241, 0.08);
+    border-bottom: 2px solid #6366f1;
+  }
+  
+  .char-correct {
+    color: #10b981;
+    text-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+  }
+  
+  .char-incorrect {
+    color: #f43f5e;
+    background: rgba(244, 63, 94, 0.2);
+    border-radius: 2px;
+  }
+  
+  .char-extra {
+    color: #fb7185;
+    background: rgba(225, 29, 72, 0.25);
+    border-radius: 2px;
+    opacity: 0.85;
+  }
+  
+  .char-pending {
+    color: #64748b;
+  }
+  
+  .word.completed-correct {
+    opacity: 0.65;
+  }
+
+  .word.completed-incorrect {
+    text-decoration: underline wavy #f43f5e;
+    text-underline-offset: 4px;
+    opacity: 0.75;
+  }
+
+  .caret-bar {
+    position: absolute;
+    width: 2.5px;
+    height: 1.6rem;
+    background: #6366f1;
+    border-radius: 2px;
+    box-shadow: 0 0 8px #6366f1;
+    animation: caretBlink 1s infinite ease-in-out;
+    pointer-events: none;
+    transition: left 0.08s ease-out, top 0.08s ease-out;
+  }
+
+  @keyframes caretBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.15; }
+  }
+
+  .glass-card {
+    background: rgba(22, 30, 46, 0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-card-hover {
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .glass-card-hover:hover {
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: 0 8px 30px rgba(99, 102, 241, 0.15);
+  }
+}
