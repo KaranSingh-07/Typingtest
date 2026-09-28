@@ -1,0 +1,85 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
+@theme {
+  --color-bg: #16181d;
+  --color-surface: #1e2128;
+  --color-line: #2a2e37;
+  --color-sub: #646a76;
+  --color-text: #e8e6df;
+  --color-main: #f2b53a;
+  --color-error: #e05561;
+  --color-error-extra: #8d3a44;
+  --font-sans: 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-main);
+  color: var(--color-bg);
+}
+
+/* Typing area: 3 visible lines. LINE_EM in TypingBox.tsx = line-height + margin-bottom. */
+.typing-viewport {
+  height: calc(1.75em * 3);
+  overflow: hidden;
+  user-select: none;
+}
+.typing-viewport > div {
+  transition: transform 120ms ease-out;
+}
+.word {
+  display: inline-block;
+  line-height: 1.5em;
+  height: 1.5em;
+  margin: 0 0.55em 0.25em 0;
+  color: var(--color-sub);
+  white-space: pre;
+}
+.word .correct {
+  color: var(--color-text);
+}
+.word .incorrect {
+  color: var(--color-error);
+}
+.word .extra {
+  color: var(--color-error-extra);
+}
+.word.error {
+  text-decoration: underline var(--color-error) 2px;
+  text-underline-offset: 0.3em;
+}
+.caret {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 1.2em;
+  margin-top: 0.15em;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--color-main);
+  transition: transform 90ms linear;
+}
+.caret-blink {
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
