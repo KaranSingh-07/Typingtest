@@ -34,7 +34,7 @@ export default function Admin() {
             setToken(draft);
           }}
         >
-          <Logo eventName="Organizer console" />
+          <Logo eventName="Organizer console" club />
           <input className={inputCls} type="password" placeholder="Admin token" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
           <button className={`${btnCls} bg-main text-bg`}>Enter</button>
         </form>
@@ -118,7 +118,7 @@ function Console({ token, onLogout }: { token: string; onLogout: () => void }) {
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-8 flex flex-col gap-6">
       <header className="flex items-center justify-between gap-4">
-        <Logo eventName="Organizer console" />
+        <Logo eventName="Organizer console" club />
         <div className="flex items-center gap-4 text-sm">
           <span className={connected ? 'text-main' : 'text-error'}>{connected ? '● connected' : '● offline'}</span>
           <a className="text-sub hover:text-text" href="/screen" target="_blank" rel="noreferrer">

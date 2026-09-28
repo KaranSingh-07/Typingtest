@@ -1,6 +1,6 @@
 import type { Entry } from '../../../shared/protocol';
 
-export function Logo({ eventName, size = 'md' }: { eventName?: string; size?: 'md' | 'lg' }) {
+export function Logo({ eventName, size = 'md', club = false }: { eventName?: string; size?: 'md' | 'lg'; club?: boolean }) {
   return (
     <div className="flex items-center gap-3 min-w-0">
       <svg viewBox="0 0 32 32" className={size === 'lg' ? 'w-12 h-12' : 'w-8 h-8'} aria-hidden>
@@ -14,7 +14,35 @@ export function Logo({ eventName, size = 'md' }: { eventName?: string; size?: 'm
         </div>
         {eventName && <div className={`text-sub truncate ${size === 'lg' ? 'text-lg' : 'text-xs'}`}>{eventName}</div>}
       </div>
+      {club && (
+        <>
+          {/* The small header copy hides on phones, where the header has no room for it. */}
+          <div className={`shrink-0 self-stretch w-px bg-line mx-0.5 ${size === 'lg' ? '' : 'hidden sm:block'}`} aria-hidden />
+          <ClubLogo className={`shrink-0 text-text ${size === 'lg' ? 'h-10' : 'h-6 hidden sm:block'}`} />
+        </>
+      )}
     </div>
+  );
+}
+
+/** The organizing club's mark (brackets around a constellation), drawn in the current text colour. */
+export function ClubLogo({ className = '' }: { className?: string }) {
+  const dots: [number, number][] = [
+    [285, 516],
+    [416, 447],
+    [495, 540],
+    [581, 477],
+    [710, 506],
+  ];
+  return (
+    <svg viewBox="120 368 760 264" className={className} role="img" aria-label="Club logo" fill="currentColor">
+      <path d="M260 378 L130 490 L130 522 L260 622 L260 590 L150 506 L260 410 Z" />
+      <path d="M740 378 L870 490 L870 522 L740 622 L740 590 L850 506 L740 410 Z" />
+      <polyline points={dots.map((d) => d.join(',')).join(' ')} fill="none" stroke="currentColor" strokeWidth="4" />
+      {dots.map(([x, y]) => (
+        <circle key={x} cx={x} cy={y} r="11" />
+      ))}
+    </svg>
   );
 }
 

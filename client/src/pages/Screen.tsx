@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import Podium from '../components/Podium';
-import { Announcement, ConnectionBanner, Leaderboard, Logo } from '../components/ui';
+import { Announcement, ClubLogo, ConnectionBanner, Leaderboard, Logo } from '../components/ui';
 import { connect, fmtClock, useArena, useNow } from '../lib/arena';
 
 /** Projector view: join QR, round status and the big leaderboard. */
@@ -33,6 +33,7 @@ export default function Screen() {
         <Announcement message={state.announcement} size="lg" />
         <div className="flex-1 flex flex-col p-[3vw]">
           <Logo eventName={state.eventName} size="lg" />
+          <ClubLogo className={`fixed right-[3vw] h-[4.5vw] text-text ${state.announcement ? "top-[6.5vw]" : "top-[3vw]"}`} />
           {state.revealAt === null ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center">
               <div className="text-main uppercase tracking-[0.35em] font-semibold text-[1.6vw] mb-3">★ The final is complete ★</div>
@@ -101,6 +102,7 @@ export default function Screen() {
     <div className="flex-1 grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-[3vw] p-[3vw]">
       <div className="flex flex-col justify-between min-w-0">
         <Logo eventName={state.eventName} size="lg" />
+          <ClubLogo className={`fixed right-[3vw] h-[4.5vw] text-text ${state.announcement ? "top-[6.5vw]" : "top-[3vw]"}`} />
         <div>
           <div className={`uppercase tracking-[0.25em] font-semibold text-[1.6vw] mb-2 ${final ? 'text-main' : 'text-sub'}`}>{label}</div>
           <div className="font-mono text-main tabular-nums leading-none text-[11vw]">{big}</div>

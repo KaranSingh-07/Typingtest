@@ -80,7 +80,7 @@ function Register({ onDone }: { onDone: (me: Me) => void }) {
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-8">
-          <Logo eventName="Typing contest" size="lg" />
+          <Logo eventName="Typing contest" size="lg" club />
         </div>
         <h1 className="text-2xl font-semibold mb-1">Register to race</h1>
         <p className="text-sub mb-6 text-sm">
@@ -267,7 +267,7 @@ function ArenaView({ me, onLogout }: { me: Me; onLogout: () => void }) {
       <Announcement message={state.announcement} />
       <TouchWarning />
       <header className="flex items-center justify-between gap-4 px-4 sm:px-8 py-4 max-w-6xl w-full mx-auto">
-        <Logo eventName={state.eventName} />
+        <Logo eventName={state.eventName} club />
         <div className="flex items-center gap-3 text-sm">
           <span className="hidden sm:inline text-sub">{state.online} online</span>
           <span className="rounded-full bg-surface border border-line px-3 py-1.5 font-mono">{me.username}</span>
