@@ -8,9 +8,11 @@ interface Snapshot {
   state: ArenaState | null;
   live: LiveUpdate | null;
   myResult: MyResult | null;
+  /** Round in which this player already has an attempt running elsewhere (e.g. before a reload). */
+  lockedRound: string | null;
 }
 
-let snapshot: Snapshot = { connected: false, error: null, state: null, live: null, myResult: null };
+let snapshot: Snapshot = { connected: false, error: null, state: null, live: null, myResult: null, lockedRound: null };
 let socket: Socket | null = null;
 let offset = 0; // server clock minus local clock, in ms
 const listeners = new Set<() => void>();
@@ -52,6 +54,7 @@ export function connect(auth: Record<string, string>) {
     set({ state, live: state.phase === 'running' ? snapshot.live : null });
   });
   s.on('live', (live: LiveUpdate) => set({ live }));
+  s.on('attempt_locked', ({ roundId }: { roundId: string }) => set({ lockedRound: roundId }));
   s.on('my_rank', ({ roundId, rank, of }: { roundId: string; rank: number; of: number }) => {
     if (snapshot.myResult?.roundId === roundId) set({ myResult: { ...snapshot.myResult, rank, of } });
   });

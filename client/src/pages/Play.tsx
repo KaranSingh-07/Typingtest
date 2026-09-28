@@ -116,7 +116,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 function ArenaView({ me, onLogout }: { me: Me; onLogout: () => void }) {
-  const { state, live, myResult, connected, error } = useArena();
+  const { state, live, myResult, lockedRound, connected, error } = useArena();
   const now = useNow(250);
   const [best, setBestState] = useState(() => getBest(me.id));
 
@@ -150,7 +150,7 @@ function ArenaView({ me, onLogout }: { me: Me; onLogout: () => void }) {
     main = (
       <div className="w-full">
         <RoundLabel final={r.kind === 'final'} number={r.number} />
-        <TypingBox key={r.id} round={{ ...r, text: r.text!, startAt: r.startAt! }} onDone={onDone} />
+        <TypingBox key={r.id} round={{ ...r, text: r.text!, startAt: r.startAt! }} locked={lockedRound === r.id} onDone={onDone} />
         {state.phase === 'running' && live && (myResult?.roundId === r.id || now > r.startAt! + r.startWindowMs) && (
           <div className="mt-8 max-w-xl mx-auto">
             <Leaderboard title={`Live · ${live.finished} finished · ${live.typing} typing`} entries={live.top} highlight={me.username} showAcc={false} />

@@ -59,6 +59,8 @@ export interface Me {
 export interface SubmitPayload {
   roundId: string;
   keys: KeyEvent[];
+  /** Random id the browser picks on its first keystroke; ties the submission to the registered attempt. */
+  attemptId: string;
 }
 
 export interface MyResult {

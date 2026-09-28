@@ -114,8 +114,12 @@ function runBot(i: number, token: string, onRoundDone: () => void) {
     const expected = replay(words, keys, r.durationMs).stats;
 
     const startIn = Math.max(0, firstKeyLocal - Date.now());
+    const attemptId = `bot-${i}-${Math.random().toString(36).slice(2, 10)}`;
     setTimeout(() => {
       const t0 = Date.now();
+      socket.emit('start', { roundId: r.id, attemptId }, (res: Ack<null>) => {
+        if (!res.ok) stats.submitFail.push(`start: ${res.error}`);
+      });
       const progress = setInterval(() => {
         const el = Date.now() - t0;
         const s = createState(words);
@@ -125,7 +129,7 @@ function runBot(i: number, token: string, onRoundDone: () => void) {
       setTimeout(() => {
         clearInterval(progress);
         const sent = Date.now();
-        socket.timeout(30000).emit('submit', { roundId: r.id, keys }, (err: unknown, res: Ack<MyResult>) => {
+        socket.timeout(30000).emit('submit', { roundId: r.id, attemptId, keys }, (err: unknown, res: Ack<MyResult>) => {
           stats.submitLatency.push(Date.now() - sent);
           if (err) stats.submitFail.push('timeout');
           else if (!res.ok) stats.submitFail.push(res.error);

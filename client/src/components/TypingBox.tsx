@@ -3,7 +3,7 @@ import { applyKey, BACKSPACE, computeStats, createState, WORD_BACKSPACE, type Ke
 import type { Ack, MyResult, RoundInfo } from '../../../shared/protocol';
 import { fmtClock, getSocket, serverNow, setMyResult } from '../lib/arena';
 
-type Status = 'locked' | 'ready' | 'typing' | 'submitting' | 'done' | 'missed' | 'error';
+type Status = 'locked' | 'ready' | 'typing' | 'submitting' | 'done' | 'missed' | 'blocked' | 'error';
 
 const LINE_EM = 1.75; // must match .word line-height + margin-bottom in index.css
 
@@ -28,14 +28,18 @@ const Word = memo(function Word({ word, input, state }: { word: string; input: s
 
 interface Props {
   round: RoundInfo & { text: string; startAt: number };
+  /** The server says this player already started this round (e.g. before reloading the page). */
+  locked?: boolean;
   onDone?: (result: MyResult) => void;
 }
 
-export default function TypingBox({ round, onDone }: Props) {
+export default function TypingBox({ round, locked, onDone }: Props) {
   const words = useMemo(() => round.text.split(' '), [round.text]);
   const engine = useRef(createState(words));
   const keys = useRef<KeyEvent[]>([]);
   const firstKeyAt = useRef(0);
+  // Not crypto.randomUUID(): that's unavailable on plain-http LAN addresses.
+  const attemptId = useRef(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
   const [, rerender] = useReducer((x: number) => x + 1, 0);
 
   const initial: Status = serverNow() < round.startAt ? 'locked' : serverNow() > round.startAt + round.startWindowMs ? 'missed' : 'ready';
@@ -60,7 +64,7 @@ export default function TypingBox({ round, onDone }: Props) {
     const log = keys.current.filter(([, t]) => t <= round.durationMs);
     getSocket()
       ?.timeout(20000)
-      .emit('submit', { roundId: round.id, keys: log }, (err: unknown, res: Ack<MyResult>) => {
+      .emit('submit', { roundId: round.id, attemptId: attemptId.current, keys: log }, (err: unknown, res: Ack<MyResult>) => {
         if (err) {
           setError('Could not reach the server to submit your score.');
           setStatus('error');
@@ -97,6 +101,10 @@ export default function TypingBox({ round, onDone }: Props) {
     return () => clearInterval(id);
   }, [round.startAt, round.startWindowMs, round.durationMs, finish]);
 
+  useEffect(() => {
+    if (locked && (statusRef.current === 'locked' || statusRef.current === 'ready')) setStatus('blocked');
+  }, [locked]);
+
   // Live progress to the server, once a second.
   useEffect(() => {
     if (status !== 'typing') return;
@@ -127,6 +135,16 @@ export default function TypingBox({ round, onDone }: Props) {
       if (k === ' ' || k === BACKSPACE || k === WORD_BACKSPACE) return;
       firstKeyAt.current = performance.now();
       setStatus('typing');
+      // Register the attempt. Typing continues meanwhile; if the server already has an attempt
+      // from this player (a reload or second tab), this one is stopped.
+      getSocket()
+        ?.timeout(10000)
+        .emit('start', { roundId: round.id, attemptId: attemptId.current }, (err: unknown, res: Ack<null>) => {
+          if (!err && !res.ok && statusRef.current === 'typing') {
+            setError(res.error);
+            setStatus('blocked');
+          }
+        });
     } else if (st !== 'typing') return;
     const t = Math.round(performance.now() - firstKeyAt.current);
     if (t > round.durationMs) return;
@@ -246,6 +264,12 @@ export default function TypingBox({ round, onDone }: Props) {
         {!focused && (status === 'ready' || status === 'typing') && (
           <Overlay>
             <div className="text-text text-lg">Click here or press any key to focus</div>
+          </Overlay>
+        )}
+        {status === 'blocked' && (
+          <Overlay solid>
+            <div className="text-text text-xl mb-1 text-center max-w-md">{error || 'You already started this round'}</div>
+            <div className="text-sub">Attempts can't be restarted by reloading. Wait for the next round.</div>
           </Overlay>
         )}
         {status === 'missed' && (

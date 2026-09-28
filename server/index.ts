@@ -115,6 +115,14 @@ io.on('connection', (socket) => {
   const user = socket.data.user as ReturnType<typeof db.userByToken>;
   if (user) socket.join(`user:${user.id}`);
   socket.emit('state', arena.state());
+  // A reloaded page learns that this player's attempt for the running round is already in progress.
+  if (user && arena.hasOpenAttempt(user.id)) socket.emit('attempt_locked', { roundId: arena.round!.id });
+
+  socket.on('start', (payload, ack: (r: Ack<null>) => void) => {
+    if (typeof ack !== 'function') return;
+    if (!user) return ack({ ok: false, error: 'Not registered' });
+    ack(arena.onStart(user, payload));
+  });
 
   socket.on('time', (ack: unknown) => typeof ack === 'function' && ack(Date.now()));
 

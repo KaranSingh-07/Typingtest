@@ -27,6 +27,7 @@ interface Round {
   startAt: number | null;
   closeAt: number | null;
   live: Map<number, { username: string; wpm: number }>;
+  attempts: Map<number, { id: string; at: number }>; // server receive time of each player's first keystroke
   submissions: Map<number, { username: string; wpm: number; raw: number; acc: number; at: number }>;
 }
 
@@ -152,6 +153,7 @@ export class Arena {
       startAt: null,
       closeAt: null,
       live: new Map(),
+      attempts: new Map(),
       submissions: new Map(),
     };
   }
@@ -244,6 +246,28 @@ export class Arena {
     r.live.set(user.id, { username: user.username, wpm });
   }
 
+  /** True if the player began an attempt in the current round that hasn't been submitted yet. */
+  hasOpenAttempt(userId: number) {
+    const r = this.round;
+    return !!r && this.phase === 'running' && r.attempts.has(userId) && !r.submissions.has(userId);
+  }
+
+  /** Called on a player's first keystroke. Each player gets exactly one attempt per round,
+   * so reloading the page (or opening a second tab) can't restart a bad start. */
+  onStart(user: Player, payload: { roundId?: unknown; attemptId?: unknown }): Ack<null> {
+    const r = this.round;
+    if (!r || this.phase !== 'running' || payload?.roundId !== r.id) return { ok: false, error: 'This round is no longer active.' };
+    if (typeof payload.attemptId !== 'string' || payload.attemptId.length > 64) return { ok: false, error: 'Invalid attempt.' };
+    const existing = r.attempts.get(user.id);
+    if (existing) {
+      return existing.id === payload.attemptId ? { ok: true, data: null } : { ok: false, error: 'You already started this round, and attempts can’t be restarted.' };
+    }
+    // Allow a little slack beyond the start window for network latency.
+    if (Date.now() > r.startAt! + CONFIG.startWindowMs + 2000) return { ok: false, error: 'This round’s start window has closed.' };
+    r.attempts.set(user.id, { id: payload.attemptId, at: Date.now() });
+    return { ok: true, data: null };
+  }
+
   onSubmit(user: Player, payload: SubmitPayload): Ack<MyResult> {
     const r = this.round;
     if (!r || payload?.roundId !== r.id) return { ok: false, error: 'This round is no longer active.' };
@@ -251,9 +275,20 @@ export class Arena {
     if (r.submissions.has(user.id)) return { ok: false, error: 'You already submitted this round.' };
     if (!validateKeys(payload.keys) || payload.keys.length === 0) return { ok: false, error: 'Invalid submission.' };
 
-    // A test can't finish faster than real time: the keystrokes must fit between GO and now.
+    // Only the attempt registered first counts. If its start message was lost, register this one now.
+    const attempt = r.attempts.get(user.id);
+    if (attempt && attempt.id !== payload.attemptId) {
+      return { ok: false, error: 'You already started this round in another tab or before reloading. Only that attempt counts.' };
+    }
+    if (!attempt) {
+      if (typeof payload.attemptId !== 'string') return { ok: false, error: 'Invalid attempt.' };
+      r.attempts.set(user.id, { id: payload.attemptId, at: Date.now() });
+    }
+
+    // A test can't finish faster than real time: the keystrokes must fit between GO (or the attempt's start) and now.
     const lastT = Math.min(payload.keys[payload.keys.length - 1]![1], CONFIG.durationMs);
-    if (Date.now() + 3000 < r.startAt! + lastT) return { ok: false, error: 'Submission rejected (timing).' };
+    const startedAt = attempt ? Math.max(r.startAt!, attempt.at - 1000) : r.startAt!;
+    if (Date.now() + 3000 < startedAt + lastT) return { ok: false, error: 'Submission rejected (timing).' };
 
     const { stats } = replay(r.words, payload.keys, CONFIG.durationMs);
     const flag = flagFor(payload.keys, stats.wpm);
