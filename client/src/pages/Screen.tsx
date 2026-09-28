@@ -10,6 +10,7 @@ export default function Screen() {
   const now = useNow(200);
   const [qr, setQr] = useState('');
   const url = state?.publicUrl || window.location.origin;
+  const joinHost = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
   useEffect(() => {
     const s = connect({ screen: '1' });
@@ -60,11 +61,11 @@ export default function Screen() {
     if (final) {
       label = '★ The final ★';
       big = <span className="text-[6vw] leading-none">Get ready</span>;
-      sub = 'One attempt · 60 seconds · prizes for the top typists';
+      sub = `One attempt · ${(r?.durationMs ?? 60000) / 1000} seconds · prizes for the top typists`;
     } else {
       label = `Round ${r?.number} starts in`;
       big = fmtClock((r?.startAt ?? now) - now);
-      sub = 'Scan to join · new round every ~2 minutes';
+      sub = `Scan to join · ${(r?.durationMs ?? state.rollingSeconds * 1000) / 1000}-second rounds, back to back`;
     }
   } else if (state.phase === 'countdown') {
     label = final ? '★ The final starts in ★' : `Round ${r?.number} starts in`;
@@ -109,7 +110,10 @@ export default function Screen() {
           <div className="w-[11vw] rounded-xl overflow-hidden shrink-0" dangerouslySetInnerHTML={{ __html: qr }} />
           <div className="min-w-0">
             <div className="text-sub text-[1.2vw]">Join at</div>
-            <div className="font-mono text-[2.2vw] break-all">{url.replace(/^https?:\/\//, '')}</div>
+            {/* One line, shrunk to fit beside the QR code (~26vw; a mono glyph is ~0.62em wide). */}
+            <div className="font-mono whitespace-nowrap" style={{ fontSize: `min(2.2vw, ${(26 / (0.62 * joinHost.length)).toFixed(2)}vw)` }}>
+              {joinHost}
+            </div>
             <div className="text-sub text-[1.1vw] mt-1">{state.online} online · {state.players} registered</div>
           </div>
         </div>

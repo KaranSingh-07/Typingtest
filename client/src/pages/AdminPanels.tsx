@@ -232,3 +232,50 @@ function EditPlayer({
     </form>
   );
 }
+
+const LENGTH_PRESETS = [15, 30, 60, 120];
+
+export function RoundLengthControl({ current, send }: { current: number | undefined; send: Send }) {
+  const [custom, setCustom] = useState('');
+  const set = (seconds: number) => void send({ type: 'setRoundLength', seconds });
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="text-sm">
+        Round length: <span className="font-mono text-main">{current ?? '–'}s</span>
+        <span className="text-sub text-xs"> · applies from the next round (or the current one if it hasn't started its countdown). The final stays at its own length.</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {LENGTH_PRESETS.map((s) => (
+          <button
+            key={s}
+            className={`${btnCls} py-1.5 font-mono text-sm border ${current === s ? 'bg-main text-bg border-main' : 'bg-bg border-line hover:border-main'}`}
+            onClick={() => set(s)}
+          >
+            {s}s
+          </button>
+        ))}
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (custom) set(Number(custom));
+            setCustom('');
+          }}
+        >
+          <input
+            className={`${inputCls} w-28 py-1.5 font-mono`}
+            type="number"
+            min={10}
+            max={300}
+            placeholder="custom s"
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+          />
+          <button className={`${btnCls} py-1.5 text-sm bg-bg border border-line`} disabled={!custom}>
+            Set
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

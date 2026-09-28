@@ -35,6 +35,7 @@ db.exec(`
     created_at INTEGER NOT NULL,
     UNIQUE (round_id, user_id)
   );
+  CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   CREATE INDEX IF NOT EXISTS results_kind ON results(kind, wpm DESC, acc DESC);
 `);
 
@@ -193,3 +194,8 @@ export function deleteUser(userId: number): string | null {
 }
 
 export const deleteResult = (resultId: number) => q.deleteResult.run(resultId).changes > 0;
+
+const getSettingQ = db.prepare('SELECT value FROM settings WHERE key = ?');
+const setSettingQ = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+export const getSetting = (key: string) => (getSettingQ.get(key) as { value: string } | undefined)?.value ?? null;
+export const setSetting = (key: string, value: string) => void setSettingQ.run(key, value);

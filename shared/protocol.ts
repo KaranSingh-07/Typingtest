@@ -46,6 +46,8 @@ export interface ArenaState {
   revealAt: number | null;
   /** How long the reveal animation runs; players see final standings only after it ends. */
   revealMs: number;
+  /** Length of rolling rounds in seconds (the final has its own fixed length). */
+  rollingSeconds: number;
 }
 
 export interface LiveUpdate {
@@ -90,6 +92,7 @@ export type AdminAction =
   | { type: 'abort' }
   | { type: 'hideUser'; username: string; hidden: boolean }
   | { type: 'purgeBots' }
+  | { type: 'setRoundLength'; seconds: number }
   | { type: 'announce'; message: string }
   | { type: 'reveal' }
   | { type: 'findUsers'; query: string }

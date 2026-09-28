@@ -84,7 +84,7 @@ function Register({ onDone }: { onDone: (me: Me) => void }) {
         </div>
         <h1 className="text-2xl font-semibold mb-1">Register to race</h1>
         <p className="text-sub mb-6 text-sm">
-          New 60-second rounds start every couple of minutes. The final decides the prizes, so use your real roll number.
+          Short timed rounds start every couple of minutes. The final decides the prizes, so use your real roll number.
         </p>
         <form onSubmit={submit} className="flex flex-col gap-4 bg-surface border border-line rounded-2xl p-5">
           <Field label="Roll number" hint="Used to hand out prizes. Not shown publicly.">
@@ -230,9 +230,9 @@ function ArenaView({ me, onLogout }: { me: Me; onLogout: () => void }) {
               <div className="text-main uppercase tracking-[0.2em] text-xs mb-3 font-semibold">The final</div>
               <div className="text-3xl font-semibold mb-3">The prize round is about to begin</div>
               <ul className="text-sub space-y-1.5 text-sm list-disc pl-5">
-                <li>One 60-second attempt. It can't be retried.</li>
+                <li>One {r ? r.durationMs / 1000 : 60}-second attempt. It can't be retried.</li>
                 <li>Ranked by WPM, with accuracy breaking ties.</li>
-                <li>Your 60 seconds begin on your first keystroke, within {r ? r.startWindowMs / 1000 : 5}s of GO.</li>
+                <li>Your timer begins on your first keystroke, within {r ? r.startWindowMs / 1000 : 8}s of GO.</li>
                 <li>Keep this tab focused. Don't refresh.</li>
               </ul>
               <div className="mt-6 font-mono text-main text-lg">Waiting for the organizers…</div>
@@ -242,7 +242,7 @@ function ArenaView({ me, onLogout }: { me: Me; onLogout: () => void }) {
               <div className="text-sub uppercase tracking-[0.2em] text-xs mb-3">Round {r?.number} starts in</div>
               <div className="font-mono text-main text-7xl sm:text-8xl tabular-nums mb-5">{countdown !== null ? fmtClock(countdown) : '–'}</div>
               <ul className="text-sub space-y-1.5 text-sm">
-                <li>60 seconds · Monkeytype-style scoring</li>
+                <li>{r ? r.durationMs / 1000 : state.rollingSeconds} seconds · Monkeytype-style scoring</li>
                 <li>Your timer starts on your first keystroke</li>
                 <li>Play as many rounds as you like. Your best counts for tonight's board.</li>
               </ul>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AdminAction, AdminStats } from '../../../shared/protocol';
-import { AnnouncementPanel, DqButton, PlayersPanel, request } from './AdminPanels';
+import { AnnouncementPanel, DqButton, PlayersPanel, RoundLengthControl, request } from './AdminPanels';
 import { Leaderboard, Logo, btnCls, inputCls } from '../components/ui';
 import { connect, fmtClock, useArena, useNow } from '../lib/arena';
 
@@ -150,6 +150,7 @@ function Console({ token, onLogout }: { token: string; onLogout: () => void }) {
             ✕ Abort current round
           </button>
         </div>
+        <RoundLengthControl current={state?.rollingSeconds} send={send} />
 
         <h2 className="text-sub uppercase tracking-[0.2em] text-xs font-semibold mt-2">The final</h2>
         <ol className="text-sub text-sm list-decimal pl-5 space-y-1">

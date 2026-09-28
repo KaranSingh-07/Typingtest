@@ -9,7 +9,7 @@ import { validateProfile } from './validate';
 const sec = (name: string, fallback: number) => Number(process.env[name] || fallback) * 1000;
 
 export const CONFIG = {
-  durationMs: sec('ROUND_SECONDS', 60),
+  durationMs: sec('ROUND_SECONDS', 60), // the final; rolling rounds can be changed from /admin
   intermissionMs: sec('INTERMISSION_SECONDS', 25), // time from a round being scheduled to GO
   countdownMs: sec('COUNTDOWN_SECONDS', 5),
   finalCountdownMs: sec('FINAL_COUNTDOWN_SECONDS', 10),
@@ -31,6 +31,7 @@ interface Round {
   words: string[];
   startAt: number | null;
   closeAt: number | null;
+  durationMs: number;
   live: Map<number, { username: string; wpm: number }>;
   attempts: Map<number, { id: string; at: number }>; // server receive time of each player's first keystroke
   submissions: Map<number, { username: string; wpm: number; raw: number; acc: number; at: number }>;
@@ -87,6 +88,8 @@ export class Arena {
   private revealTimer: NodeJS.Timeout | null = null;
   /** True from the end of a final until its podium reveal finishes: players can't see standings yet. */
   private finalSecret = false;
+  /** Length of rolling rounds; set from /admin and remembered across restarts. */
+  private rollingDurationMs = Number(db.getSetting('rolling_seconds')) * 1000 || CONFIG.durationMs;
 
   constructor(private io: Server, private eventName: string, private publicUrl: string) {
     this.loadHidden();
@@ -117,7 +120,7 @@ export class Arena {
             number: r.number,
             startAt: r.startAt,
             startWindowMs: CONFIG.startWindowMs,
-            durationMs: CONFIG.durationMs,
+            durationMs: r.durationMs,
             closeAt: r.closeAt,
             ...(showText ? { text: r.text } : {}),
           }
@@ -130,6 +133,7 @@ export class Arena {
       announcement: this.announcement,
       revealAt: this.revealAt,
       revealMs: CONFIG.revealMs,
+      rollingSeconds: this.rollingDurationMs / 1000,
     };
   }
 
@@ -199,6 +203,7 @@ export class Arena {
       words: text.split(' '),
       startAt: null,
       closeAt: null,
+      durationMs: kind === 'final' ? CONFIG.durationMs : this.rollingDurationMs,
       live: new Map(),
       attempts: new Map(),
       submissions: new Map(),
@@ -207,7 +212,7 @@ export class Arena {
 
   private arm(round: Round, startAt: number, countdownMs: number) {
     round.startAt = startAt;
-    round.closeAt = startAt + CONFIG.startWindowMs + CONFIG.durationMs + CONFIG.graceMs;
+    round.closeAt = startAt + CONFIG.startWindowMs + round.durationMs + CONFIG.graceMs;
     this.at(startAt - countdownMs, () => {
       this.phase = 'countdown';
       this.broadcast();
@@ -368,10 +373,10 @@ export class Arena {
 
     // A test can't finish faster than real time: the keystrokes must fit between GO and now.
     // (Measured from GO, not from when the start message arrived, which a reconnect can delay.)
-    const lastT = Math.min(payload.keys[payload.keys.length - 1]![1], CONFIG.durationMs);
+    const lastT = Math.min(payload.keys[payload.keys.length - 1]![1], r.durationMs);
     if (Date.now() + 3000 < r.startAt! + lastT) return { ok: false, error: 'Submission rejected (timing).' };
 
-    const { stats } = replay(r.words, payload.keys, CONFIG.durationMs);
+    const { stats } = replay(r.words, payload.keys, r.durationMs);
     const flag = flagFor(payload.keys, stats.wpm);
     const saved = db.saveResult({ roundId: r.id, kind: r.kind, userId: user.id, flag, ...stats });
     if (!saved) return { ok: false, error: 'You already submitted this round.' };
@@ -501,6 +506,21 @@ export class Arena {
       case 'disqualify': {
         if (!db.deleteResult(Number(action.resultId))) return { ok: false, error: 'No such score.' };
         this.refreshBoards();
+        this.broadcast();
+        break;
+      }
+      case 'setRoundLength': {
+        const seconds = Math.round(Number(action.seconds));
+        if (!Number.isFinite(seconds) || seconds < 10 || seconds > 300) return { ok: false, error: 'Round length must be between 10 and 300 seconds.' };
+        this.rollingDurationMs = seconds * 1000;
+        db.setSetting('rolling_seconds', String(seconds));
+        // A rolling round still in its waiting period picks up the new length right away.
+        const r = this.round;
+        if (r?.kind === 'rolling' && this.phase === 'waiting' && r.startAt) {
+          r.durationMs = this.rollingDurationMs;
+          this.clearTimers();
+          this.arm(r, r.startAt, CONFIG.countdownMs);
+        }
         this.broadcast();
         break;
       }

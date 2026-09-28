@@ -32,7 +32,7 @@ Scoring follows Monkeytype (WPM = characters of correctly typed words, including
 5. **Health check:** `GET /api/health`. The Dockerfile already defines one.
 6. Keep it at **one instance**. All round state lives in memory in that single process. 1 vCPU and 512 MB is plenty: 400 simulated players used about 90 MB.
 
-Optional timing settings, in seconds: `ROUND_SECONDS` (60), `INTERMISSION_SECONDS` (25), `COUNTDOWN_SECONDS` (5), `FINAL_COUNTDOWN_SECONDS` (10), `START_WINDOW_SECONDS` (8), `SUBMIT_GRACE_SECONDS` (10), `RESULTS_SECONDS` (15). A rolling cycle is about 2 minutes.
+Optional timing settings, in seconds: `ROUND_SECONDS` (60, the final and the default rolling length), `INTERMISSION_SECONDS` (25), `COUNTDOWN_SECONDS` (5), `FINAL_COUNTDOWN_SECONDS` (10), `START_WINDOW_SECONDS` (8), `SUBMIT_GRACE_SECONDS` (10), `RESULTS_SECONDS` (15). A rolling cycle is about 2 minutes.
 
 Local Docker: `ADMIN_TOKEN=secret docker compose up --build`, then open http://localhost:3000.
 
@@ -46,6 +46,7 @@ Local Docker: `ADMIN_TOKEN=secret docker compose up --build`, then open http://l
 **While people arrive:** rolling rounds run on their own. Students scan the QR code, register and play as many rounds as they like. "Tonight's top typists" shows each player's best rolling score.
 - **Announcement** in `/admin` puts a banner on every player page and on the projector, e.g. "The final starts in 5 minutes". Clear it when you're done.
 - **Players** in `/admin`: search by roll number, name or username, then **edit** a mistyped roll number or name, list a player's **scores** and **DQ** one, or **delete** the player. Edited players' pages reconnect by themselves.
+- **Round length** in `/admin` (15/30/60/120 s or custom, 10–300 s) changes rolling rounds from the next round on, and is remembered across restarts. The final always uses `ROUND_SECONDS` (60 s).
 - **Hide** removes an inappropriate username from all boards. **DQ** also works directly on **Flagged scores**.
 
 **The final**

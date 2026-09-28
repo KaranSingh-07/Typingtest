@@ -11,7 +11,8 @@ import { validateProfile } from './validate';
 import type { Ack, AdminAction, SubmitPayload } from '../shared/protocol';
 
 const PORT = Number(process.env.PORT || 3000);
-const EVENT_NAME = process.env.EVENT_NAME || "Freshers' Orientation";
+// Dashboards sometimes store quotes escaped (Freshers\' → Freshers'); undo that.
+const EVENT_NAME = (process.env.EVENT_NAME || "Freshers' Orientation").replace(/\\(['"])/g, '$1');
 const PUBLIC_URL = process.env.PUBLIC_URL || '';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || randomBytes(9).toString('base64url');
 if (!process.env.ADMIN_TOKEN) console.warn(`ADMIN_TOKEN not set. Generated one for this run: ${ADMIN_TOKEN}`);
