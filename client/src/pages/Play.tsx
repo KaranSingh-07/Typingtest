@@ -86,7 +86,7 @@ function Register({ onDone }: { onDone: (me: Me) => void }) {
         </p>
         <form onSubmit={submit} className="flex flex-col gap-4 bg-surface border border-line rounded-2xl p-5">
           <Field label="Roll number" hint="Used to hand out prizes. Not shown publicly.">
-            <input className={`${inputCls} font-mono uppercase`} value={roll} onChange={(e) => setRoll(e.target.value)} required minLength={3} maxLength={24} autoComplete="off" placeholder="e.g. 2025CS101" />
+            <input className={`${inputCls} font-mono uppercase`} value={roll} onChange={(e) => setRoll(e.target.value)} required minLength={3} maxLength={24} autoComplete="off" placeholder="e.g. 26B0001" />
           </Field>
           <Field label="Full name" hint="Not shown publicly.">
             <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={60} autoComplete="name" placeholder="Your name" />
