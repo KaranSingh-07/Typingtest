@@ -40,20 +40,29 @@ async function syncClock(s: Socket) {
 
 export function connect(auth: Record<string, string>) {
   socket?.disconnect();
-  const s = io({ auth, transports: ['websocket', 'polling'] });
+  // Start clean so a previous session's error (e.g. "not registered") can't leak into this one.
+  set({ connected: false, error: null, myResult: null, lockedRound: null });
+  // Prefer WebSocket but fall back to HTTP long-polling if a network or proxy blocks it.
+  const s = io({ auth, transports: ['websocket', 'polling'], tryAllTransports: true });
   socket = s;
   s.on('connect', () => {
     set({ connected: true, error: null });
     void syncClock(s);
   });
   // Ignore a replaced socket's late events (e.g. React StrictMode's double mount).
-  s.on('disconnect', () => socket === s && set({ connected: false }));
+  s.on('disconnect', (reason) => {
+    if (socket !== s) return;
+    set({ connected: false });
+    // The server drops a player's connections after an organizer edits their profile; reconnect to pick it up.
+    if (reason === 'io server disconnect') s.connect();
+  });
   s.on('connect_error', (err) => socket === s && set({ connected: false, error: err.message }));
   s.on('state', (state: ArenaState) => {
     if (!snapshot.state) offset = state.serverNow - Date.now(); // rough until the ping sync finishes
     set({ state, live: state.phase === 'running' ? snapshot.live : null });
   });
   s.on('live', (live: LiveUpdate) => set({ live }));
+  s.on('my_result', (myResult: MyResult) => set({ myResult }));
   s.on('attempt_locked', ({ roundId }: { roundId: string }) => set({ lockedRound: roundId }));
   s.on('my_rank', ({ roundId, rank, of }: { roundId: string; rank: number; of: number }) => {
     if (snapshot.myResult?.roundId === roundId) set({ myResult: { ...snapshot.myResult, rank, of } });

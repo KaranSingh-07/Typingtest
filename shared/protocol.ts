@@ -40,6 +40,12 @@ export interface ArenaState {
   final: { top: Entry[]; count: number } | null;
   online: number;
   players: number;
+  /** Organizer message shown on every player page and the projector. */
+  announcement: string | null;
+  /** Server time the projector's podium reveal of the final began (null = not started). */
+  revealAt: number | null;
+  /** How long the reveal animation runs; players see final standings only after it ends. */
+  revealMs: number;
 }
 
 export interface LiveUpdate {
@@ -73,7 +79,8 @@ export interface MyResult {
   of?: number;
 }
 
-export type Ack<T> = { ok: true; data: T } | { ok: false; error: string };
+/** `code` lets the client react to specific failures without matching on the message. */
+export type Ack<T> = { ok: true; data: T } | { ok: false; error: string; code?: 'already_started' | 'window_closed' };
 
 export type AdminAction =
   | { type: 'pause' }
@@ -83,12 +90,42 @@ export type AdminAction =
   | { type: 'abort' }
   | { type: 'hideUser'; username: string; hidden: boolean }
   | { type: 'purgeBots' }
+  | { type: 'announce'; message: string }
+  | { type: 'reveal' }
+  | { type: 'findUsers'; query: string }
+  | { type: 'userResults'; userId: number }
+  | { type: 'updateUser'; userId: number; roll: string; name: string; username: string }
+  | { type: 'deleteUser'; userId: number }
+  | { type: 'disqualify'; resultId: number }
   | { type: 'stats' };
+
+export interface AdminUser {
+  id: number;
+  roll: string;
+  name: string;
+  username: string;
+  hidden: boolean;
+  best: number | null;
+  final: number | null;
+  rounds: number;
+}
+
+export interface AdminResult {
+  id: number;
+  kind: string;
+  wpm: number;
+  acc: number;
+  flag: string | null;
+  created_at: number;
+}
 
 export interface AdminStats {
   registered: number;
   online: number;
   rollingResults: number;
-  flagged: { username: string; roll: string; name: string; kind: RoundKind; wpm: number; acc: number; reason: string }[];
+  flagged: { id: number; username: string; roll: string; name: string; kind: RoundKind; wpm: number; acc: number; reason: string }[];
   hidden: string[];
+  /** Filled by findUsers / userResults. */
+  users?: AdminUser[];
+  results?: AdminResult[];
 }

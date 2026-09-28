@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import type { Entry, Me, RoundKind } from '../shared/protocol';
+import type { AdminResult, AdminUser, Entry, Me, RoundKind } from '../shared/protocol';
 
 const dataDir = process.env.DATA_DIR || join(process.cwd(), 'data');
 mkdirSync(dataDir, { recursive: true });
@@ -65,21 +65,39 @@ const q = {
       WHERE r.kind = 'rolling' AND u.hidden = 0
     ) WHERE rn = 1 ORDER BY wpm DESC, acc DESC, created_at LIMIT ?`),
   finalAll: db.prepare(`
-    SELECT u.username, u.roll, u.name, r.wpm, r.acc, r.raw, r.total_keys, r.flag, r.created_at
+    SELECT u.username, u.roll, u.name, r.wpm, r.acc, r.raw, r.total_keys, r.flag, r.created_at, r.user_id
     FROM results r JOIN users u ON u.id = r.user_id
     WHERE r.kind = 'final' AND u.hidden = 0
     ORDER BY r.wpm DESC, r.acc DESC, r.created_at`),
   finalCount: db.prepare(`SELECT COUNT(*) AS n FROM results r JOIN users u ON u.id = r.user_id WHERE r.kind = 'final' AND u.hidden = 0`),
-  clearFinal: db.prepare(`DELETE FROM results WHERE kind = 'final'`),
+  archiveFinal: db.prepare(`UPDATE results SET kind = 'final_archived' WHERE kind = 'final'`),
+  finalArchived: db.prepare(`
+    SELECT r.round_id, u.username, u.roll, u.name, r.wpm, r.acc, r.raw, r.flag, r.created_at
+    FROM results r JOIN users u ON u.id = r.user_id
+    WHERE r.kind = 'final_archived' ORDER BY r.round_id, r.wpm DESC, r.acc DESC`),
   deleteRound: db.prepare('DELETE FROM results WHERE round_id = ?'),
   setHidden: db.prepare('UPDATE users SET hidden = ? WHERE username = ?'),
   countUsers: db.prepare('SELECT COUNT(*) AS n FROM users'),
   countRolling: db.prepare(`SELECT COUNT(*) AS n FROM results WHERE kind = 'rolling'`),
   flagged: db.prepare(`
-    SELECT u.username, u.roll, u.name, r.kind, r.wpm, r.acc, r.flag AS reason
+    SELECT r.id, u.username, u.roll, u.name, r.kind, r.wpm, r.acc, r.flag AS reason
     FROM results r JOIN users u ON u.id = r.user_id WHERE r.flag IS NOT NULL
     ORDER BY r.created_at DESC LIMIT 50`),
   hidden: db.prepare('SELECT username FROM users WHERE hidden = 1'),
+  byId: db.prepare('SELECT * FROM users WHERE id = ?'),
+  findUsers: db.prepare(`
+    SELECT u.id, u.roll, u.name, u.username, u.hidden,
+      (SELECT MAX(wpm) FROM results WHERE user_id = u.id AND kind = 'rolling') AS best,
+      (SELECT wpm FROM results WHERE user_id = u.id AND kind = 'final') AS final,
+      (SELECT COUNT(*) FROM results WHERE user_id = u.id AND kind = 'rolling') AS rounds
+    FROM users u
+    WHERE u.roll LIKE ?1 ESCAPE '!' OR u.name LIKE ?1 ESCAPE '!' OR u.username LIKE ?1 ESCAPE '!'
+    ORDER BY u.username LIMIT 25`),
+  userResults: db.prepare('SELECT id, kind, wpm, acc, flag, created_at FROM results WHERE user_id = ? ORDER BY created_at DESC LIMIT 100'),
+  updateUser: db.prepare('UPDATE users SET roll = ?, name = ?, username = ? WHERE id = ?'),
+  deleteUserResults: db.prepare('DELETE FROM results WHERE user_id = ?'),
+  deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
+  deleteResult: db.prepare('DELETE FROM results WHERE id = ?'),
   bestPerUser: db.prepare(`
     SELECT u.roll, u.name, u.username, MAX(r.wpm) AS best_wpm, COUNT(r.id) AS rounds
     FROM users u LEFT JOIN results r ON r.user_id = u.id AND r.kind = 'rolling'
@@ -131,7 +149,9 @@ export const tonightTop = (limit = 10) => rank(q.tonight.all(limit) as any[]);
 export const finalRows = () => q.finalAll.all() as any[];
 export const finalTop = (limit = 10) => rank(finalRows().slice(0, limit));
 export const finalCount = () => (q.finalCount.get() as { n: number }).n;
-export const clearFinal = () => q.clearFinal.run();
+/** Starting a new final keeps the previous one's scores, just out of the standings. */
+export const archiveFinal = () => q.archiveFinal.run();
+export const finalArchivedRows = () => q.finalArchived.all() as any[];
 export const deleteRound = (roundId: string) => q.deleteRound.run(roundId);
 export const setHidden = (username: string, hidden: boolean) => q.setHidden.run(hidden ? 1 : 0, username).changes > 0;
 export const countUsers = () => (q.countUsers.get() as { n: number }).n;
@@ -146,3 +166,30 @@ export function purgeLoadTestBots(): number {
   db.exec(`DELETE FROM results WHERE user_id IN (${bots})`);
   return Number(db.prepare(`DELETE FROM users WHERE id IN (${bots})`).run().changes);
 }
+
+export function findUsers(query: string): AdminUser[] {
+  const like = `%${query.replace(/[!%_]/g, (c) => "!" + c)}%`;
+  return (q.findUsers.all(like) as any[]).map((u) => ({ ...u, hidden: !!u.hidden }));
+}
+
+export const userResults = (userId: number) => q.userResults.all(userId) as unknown as AdminResult[];
+
+export function updateUser(userId: number, roll: string, name: string, username: string): { ok: true; me: Me } | { ok: false; error: string } {
+  if (!q.byId.get(userId)) return { ok: false, error: 'No such player.' };
+  const rollOwner = q.byRoll.get(roll) as UserRow | undefined;
+  if (rollOwner && rollOwner.id !== userId) return { ok: false, error: `Roll number ${roll} already belongs to ${rollOwner.username}.` };
+  const nameOwner = q.byUsername.get(username) as UserRow | undefined;
+  if (nameOwner && nameOwner.id !== userId) return { ok: false, error: 'That username is taken.' };
+  q.updateUser.run(roll, name, username, userId);
+  return { ok: true, me: toMe(q.byId.get(userId) as unknown as UserRow) };
+}
+
+export function deleteUser(userId: number): string | null {
+  const u = q.byId.get(userId) as UserRow | undefined;
+  if (!u) return null;
+  q.deleteUserResults.run(userId);
+  q.deleteUser.run(userId);
+  return u.username;
+}
+
+export const deleteResult = (resultId: number) => q.deleteResult.run(resultId).changes > 0;

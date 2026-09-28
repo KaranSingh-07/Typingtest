@@ -7,6 +7,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { Server } from 'socket.io';
 import * as db from './db';
 import { Arena, CONFIG } from './arena';
+import { validateProfile } from './validate';
 import type { Ack, AdminAction, SubmitPayload } from '../shared/protocol';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -45,17 +46,10 @@ app.get('/api/health', (req, res) => {
   res.json(body);
 });
 
-const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : '');
-
 app.post('/api/register', (req, res) => {
-  const roll = clean(req.body?.roll, 24).toUpperCase();
-  const name = clean(req.body?.name, 60);
-  const username = clean(req.body?.username, 16);
-  if (!/^[A-Z0-9/_-]{3,24}$/.test(roll)) return res.status(400).json({ error: 'Enter a valid roll number (letters, digits, / or -).' });
-  if (!/^[\p{L} .'-]{2,60}$/u.test(name)) return res.status(400).json({ error: 'Enter your full name (letters only).' });
-  if (!/^[A-Za-z0-9_.]{3,16}$/.test(username)) {
-    return res.status(400).json({ error: 'Username must be 3-16 characters: letters, digits, _ or .' });
-  }
+  const v = validateProfile(req.body ?? {});
+  if (!v.ok) return res.status(400).json({ error: v.error });
+  const { roll, name, username } = v.value;
   const result = db.registerUser(roll, name, username);
   if (!result.ok) return res.status(409).json({ error: result.error });
   arena.onRegistered();
@@ -81,10 +75,13 @@ const csv = (rows: Record<string, unknown>[]) => {
 
 app.get('/api/admin/export/:kind', (req, res) => {
   if (!isAdmin(req.headers['x-admin-token'])) return res.status(401).json({ error: 'Bad admin token' });
+  const iso = (r: any) => ({ ...r, created_at: new Date(r.created_at).toISOString() });
   const rows =
     req.params.kind === 'final'
-      ? db.finalRows().map((r, i) => ({ rank: i + 1, ...r, created_at: new Date(r.created_at).toISOString() }))
-      : db.bestPerUser();
+      ? db.finalRows().map(({ user_id: _id, ...r }, i) => ({ rank: i + 1, ...iso(r) }))
+      : req.params.kind === 'final-archive'
+        ? db.finalArchivedRows().map(iso)
+        : db.bestPerUser();
   res.type('text/csv').send(csv(rows));
 });
 
@@ -103,6 +100,8 @@ io.use((socket, next) => {
   if (auth.admin !== undefined) {
     if (!isAdmin(auth.admin)) return next(new Error('bad admin token'));
     socket.data.admin = true;
+  } else if (auth.screen) {
+    socket.data.screen = true;
   } else if (typeof auth.token === 'string' && auth.token) {
     const user = db.userByToken(auth.token);
     if (!user) return next(new Error('not registered'));
@@ -114,9 +113,16 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   const user = socket.data.user as ReturnType<typeof db.userByToken>;
   if (user) socket.join(`user:${user.id}`);
-  socket.emit('state', arena.state());
-  // A reloaded page learns that this player's attempt for the running round is already in progress.
-  if (user && arena.hasOpenAttempt(user.id)) socket.emit('attempt_locked', { roundId: arena.round!.id });
+  // The projector and organizers see the final's standings before the podium reveal; players don't.
+  const audience = socket.data.admin || socket.data.screen ? 'full' : 'public';
+  socket.join(audience);
+  socket.emit('state', arena.state(audience));
+  if (user) {
+    // A reloaded page learns about an attempt already in progress, or gets its result back.
+    if (arena.hasOpenAttempt(user.id)) socket.emit('attempt_locked', { roundId: arena.round!.id });
+    const mine = arena.myResult(user.id);
+    if (mine) socket.emit('my_result', mine);
+  }
 
   socket.on('start', (payload, ack: (r: Ack<null>) => void) => {
     if (typeof ack !== 'function') return;
@@ -141,6 +147,7 @@ io.on('connection', (socket) => {
       const result = arena.onSubmit(user, payload);
       if (process.env.LOG_SUBMISSIONS) console.log(`[submit] ${user.username} keys=${payload?.keys?.length} ->`, JSON.stringify(result));
       ack(result);
+      if (result.ok) arena.maybeCloseEarly();
     } catch (err) {
       console.error('submit failed', err);
       ack({ ok: false, error: 'Server error while scoring.' });

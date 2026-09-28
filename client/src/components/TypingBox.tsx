@@ -140,10 +140,12 @@ export default function TypingBox({ round, locked, onDone }: Props) {
       getSocket()
         ?.timeout(10000)
         .emit('start', { roundId: round.id, attemptId: attemptId.current }, (err: unknown, res: Ack<null>) => {
-          if (!err && !res.ok && statusRef.current === 'typing') {
+          // Other failures (e.g. a timeout while reconnecting) are left to the submission to sort out.
+          if (err || res.ok || statusRef.current !== 'typing') return;
+          if (res.code === 'already_started') {
             setError(res.error);
             setStatus('blocked');
-          }
+          } else if (res.code === 'window_closed') setStatus('missed');
         });
     } else if (st !== 'typing') return;
     const t = Math.round(performance.now() - firstKeyAt.current);

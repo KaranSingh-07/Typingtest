@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { ConnectionBanner, Leaderboard, Logo } from '../components/ui';
+import Podium from '../components/Podium';
+import { Announcement, ConnectionBanner, Leaderboard, Logo } from '../components/ui';
 import { connect, fmtClock, useArena, useNow } from '../lib/arena';
 
 /** Projector view: join QR, round status and the big leaderboard. */
@@ -11,7 +12,7 @@ export default function Screen() {
   const url = state?.publicUrl || window.location.origin;
 
   useEffect(() => {
-    const s = connect({});
+    const s = connect({ screen: '1' });
     return () => {
       s.disconnect();
     };
@@ -22,6 +23,29 @@ export default function Screen() {
   }, [url]);
 
   if (!state) return <div className="min-h-dvh flex items-center justify-center text-sub text-2xl">Connecting…</div>;
+
+  // After the final: hold the standings back until the organizer starts the podium reveal.
+  if (state.phase === 'results' && state.results?.kind === 'final') {
+    const finalTop = state.final?.top ?? state.results.top;
+    return (
+      <div className="min-h-dvh flex flex-col overflow-hidden">
+        <Announcement message={state.announcement} size="lg" />
+        <div className="flex-1 flex flex-col p-[3vw]">
+          <Logo eventName={state.eventName} size="lg" />
+          {state.revealAt === null ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center">
+              <div className="text-main uppercase tracking-[0.35em] font-semibold text-[1.6vw] mb-3">★ The final is complete ★</div>
+              <div className="text-[5vw] font-semibold leading-tight">The results are in…</div>
+              <div className="text-sub text-[1.6vw] mt-4">{state.results.count} finalists · winners revealed shortly</div>
+            </div>
+          ) : (
+            <Podium entries={finalTop} count={state.final?.count ?? state.results.count} elapsed={now - state.revealAt} />
+          )}
+        </div>
+        <ConnectionBanner connected={connected} error={error} />
+      </div>
+    );
+  }
 
   const r = state.round;
   const final = r?.kind === 'final' || (state.mode === 'final' && state.phase !== 'results');
@@ -66,14 +90,14 @@ export default function Screen() {
         empty="No finishers this round."
       />
     );
-  } else if (state.mode === 'final' && state.final) {
-    board = <Leaderboard size="lg" title="Final standings" entries={state.final.top} />;
   } else {
     board = <Leaderboard size="lg" title="Tonight's top typists" entries={state.tonight} empty="Scan the code and set the first score!" />;
   }
 
   return (
-    <div className="min-h-dvh grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-[3vw] p-[3vw]">
+    <div className="min-h-dvh flex flex-col">
+    <Announcement message={state.announcement} size="lg" />
+    <div className="flex-1 grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-[3vw] p-[3vw]">
       <div className="flex flex-col justify-between min-w-0">
         <Logo eventName={state.eventName} size="lg" />
         <div>
@@ -92,6 +116,7 @@ export default function Screen() {
       </div>
       <div className="min-w-0 self-center">{board}</div>
       <ConnectionBanner connected={connected} error={error} />
+    </div>
     </div>
   );
 }

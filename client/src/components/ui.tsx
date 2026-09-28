@@ -85,3 +85,27 @@ export const inputCls =
   'w-full rounded-lg bg-bg border border-line px-3.5 py-2.5 text-text placeholder:text-sub/70 outline-none focus:border-main transition-colors';
 export const btnCls =
   'rounded-lg px-4 py-2.5 font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+
+export function Announcement({ message, size = 'md' }: { message: string | null; size?: 'md' | 'lg' }) {
+  if (!message) return null;
+  return (
+    <div
+      role="status"
+      className={`w-full bg-main text-bg font-semibold text-center ${size === 'lg' ? 'text-[1.8vw] py-[0.8vw] px-[2vw]' : 'text-sm sm:text-base py-2.5 px-4'}`}
+    >
+      📣 {message}
+    </div>
+  );
+}
+
+/** Phones and tablets: their keyboards don't report keys reliably, so warn before anyone relies on one. */
+export const isTouchDevice = () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
+export function TouchWarning() {
+  if (!isTouchDevice()) return null;
+  return (
+    <div className="w-full bg-error/15 border-b border-error/40 text-text text-sm text-center py-2.5 px-4">
+      You're on a phone or tablet. Typing here can be unreliable, so please use a laptop for the contest.
+    </div>
+  );
+}

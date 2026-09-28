@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Ack, AdminAction, AdminStats } from '../../../shared/protocol';
+import type { AdminAction, AdminStats } from '../../../shared/protocol';
+import { AnnouncementPanel, DqButton, PlayersPanel, request } from './AdminPanels';
 import { Leaderboard, Logo, btnCls, inputCls } from '../components/ui';
-import { connect, fmtClock, getSocket, useArena, useNow } from '../lib/arena';
+import { connect, fmtClock, useArena, useNow } from '../lib/arena';
 
 const KEY = 'tf_admin';
 const load = () => {
@@ -65,15 +66,13 @@ function Console({ token, onLogout }: { token: string; onLogout: () => void }) {
     };
   }, [token]);
 
-  const send = useCallback((action: AdminAction) => {
-    getSocket()
-      ?.timeout(8000)
-      .emit('admin', action, (err: unknown, res: Ack<AdminStats | null>) => {
-        if (err) return setMsg('No response from server.');
-        if (!res.ok) return setMsg(res.error);
-        if (res.data) setStats(res.data);
-        if (action.type !== 'stats') setMsg(`Done: ${action.type}`);
-      });
+  const send = useCallback(async (action: AdminAction) => {
+    const res = await request(action);
+    if (!res) return setMsg('No response from server.');
+    if (!res.ok) return setMsg(res.error);
+    if (res.data) setStats(res.data);
+    if (!['stats', 'findUsers', 'userResults'].includes(action.type)) setMsg(`Done: ${action.type}`);
+    return res.data;
   }, []);
 
   useEffect(() => {
@@ -83,7 +82,7 @@ function Console({ token, onLogout }: { token: string; onLogout: () => void }) {
     return () => clearInterval(id);
   }, [connected, send]);
 
-  const download = async (kind: 'final' | 'players') => {
+  const download = async (kind: 'final' | 'players' | 'final-archive') => {
     const res = await fetch(`/api/admin/export/${kind}`, { headers: { 'x-admin-token': token } });
     if (!res.ok) return setMsg('Export failed (check the token).');
     const blob = await res.blob();
@@ -108,6 +107,8 @@ function Console({ token, onLogout }: { token: string; onLogout: () => void }) {
   const r = state?.round;
   const busy = state?.phase === 'countdown' || state?.phase === 'running';
   const confirmSend = (text: string, action: AdminAction) => window.confirm(text) && send(action);
+  const finalDone = state?.phase === 'results' && state.results?.kind === 'final';
+  const revealing = !!state?.revealAt && now < state.revealAt + state.revealMs;
   let timing = '';
   if (r?.startAt) {
     if (now < r.startAt) timing = `GO in ${fmtClock(r.startAt - now)}`;
@@ -153,8 +154,9 @@ function Console({ token, onLogout }: { token: string; onLogout: () => void }) {
         <h2 className="text-sub uppercase tracking-[0.2em] text-xs font-semibold mt-2">The final</h2>
         <ol className="text-sub text-sm list-decimal pl-5 space-y-1">
           <li><b className="text-text">Prepare final</b>: rolling rounds stop (a running round finishes first). Everyone sees "get ready".</li>
-          <li><b className="text-text">Start final</b>: a 10s countdown, then one 60s attempt. Previous final scores are wiped.</li>
-          <li>Results stay on screen until you resume rolling rounds.</li>
+          <li><b className="text-text">Start final</b>: a 10s countdown, then one 60s attempt. A previous final's scores are archived.</li>
+          <li><b className="text-text">Reveal podium</b>: the projector counts down 10th → 1st (about 25s). Players see the standings once it ends.</li>
+          <li>Results stay up until you resume rolling rounds. Resuming before the reveal shows everyone the standings.</li>
         </ol>
         <div className="flex flex-wrap gap-3">
           <button className={`${btnCls} bg-bg border border-main text-main`} onClick={() => send({ type: 'prepareFinal' })}>
@@ -163,9 +165,19 @@ function Console({ token, onLogout }: { token: string; onLogout: () => void }) {
           <button
             className={`${btnCls} bg-main text-bg`}
             disabled={!(state?.mode === 'final' && state.phase === 'waiting' && r?.kind === 'final')}
-            onClick={() => confirmSend('Start the FINAL now? Everyone gets a 10 second countdown.', { type: 'startFinal' })}
+            onClick={() =>
+              confirmSend(
+                state?.final
+                  ? `Start a NEW final? The current final results (${state.final.count} scores) will be archived and replaced. Download the final CSV first if you need it.`
+                  : 'Start the FINAL now? Everyone gets a 10 second countdown.',
+                { type: 'startFinal' },
+              )
+            }
           >
             2 · Start final
+          </button>
+          <button className={`${btnCls} bg-main text-bg`} disabled={!finalDone || revealing} onClick={() => send({ type: 'reveal' })}>
+            {revealing ? 'Revealing…' : state?.revealAt ? '3 · Replay podium reveal' : '3 · Reveal podium'}
           </button>
           <button className={`${btnCls} bg-bg border border-line`} onClick={() => download('final')}>
             ⤓ Final results CSV
@@ -173,9 +185,16 @@ function Console({ token, onLogout }: { token: string; onLogout: () => void }) {
           <button className={`${btnCls} bg-bg border border-line`} onClick={() => download('players')}>
             ⤓ All players CSV
           </button>
+          <button className={`${btnCls} bg-bg border border-line`} onClick={() => download('final-archive')}>
+            ⤓ Archived finals CSV
+          </button>
         </div>
         {msg && <div className="text-sm text-main">{msg}</div>}
       </section>
+
+      <AnnouncementPanel current={state?.announcement ?? null} send={send} />
+
+      <PlayersPanel send={send} />
 
       <div className="grid gap-6 md:grid-cols-2 items-start">
         <div className="flex flex-col gap-6">
@@ -219,14 +238,17 @@ function Console({ token, onLogout }: { token: string; onLogout: () => void }) {
               <div className="text-sub text-sm">Nothing flagged.</div>
             ) : (
               <ul className="text-sm font-mono space-y-1.5">
-                {stats.flagged.map((f, i) => (
-                  <li key={i} className="flex justify-between gap-3">
+                {stats.flagged.map((f) => (
+                  <li key={f.id} className="flex justify-between items-center gap-3">
                     <span className="truncate">
                       {f.username} <span className="text-sub">({f.roll}, {f.kind})</span>
                     </span>
                     <span className="text-error shrink-0">
                       {Math.round(f.wpm)} wpm · {f.reason}
                     </span>
+                    <DqButton
+                      onClick={() => confirmSend(`Disqualify ${f.username}'s ${Math.round(f.wpm)} wpm score? This deletes it.`, { type: 'disqualify', resultId: f.id })}
+                    />
                   </li>
                 ))}
               </ul>

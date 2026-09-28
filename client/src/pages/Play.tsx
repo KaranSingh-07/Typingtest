@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Me, MyResult } from '../../../shared/protocol';
 import TypingBox, { Stat } from '../components/TypingBox';
-import { ConnectionBanner, Leaderboard, Logo, btnCls, inputCls } from '../components/ui';
+import { Announcement, ConnectionBanner, Leaderboard, Logo, TouchWarning, btnCls, inputCls } from '../components/ui';
 import { clearToken, fetchMe, getBest, getToken, register, setBest } from '../lib/api';
 import { connect, fmtClock, useArena, useNow } from '../lib/arena';
 
@@ -75,7 +75,9 @@ function Register({ onDone }: { onDone: (me: Me) => void }) {
   };
 
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-dvh flex flex-col">
+    <TouchWarning />
+    <div className="flex-1 flex flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-8">
           <Logo eventName="Typing contest" size="lg" />
@@ -101,6 +103,7 @@ function Register({ onDone }: { onDone: (me: Me) => void }) {
         </form>
         <p className="text-sub text-xs mt-4 text-center">Playing on a laptop is strongly recommended.</p>
       </div>
+    </div>
     </div>
   );
 }
@@ -128,6 +131,11 @@ function ArenaView({ me, onLogout }: { me: Me; onLogout: () => void }) {
       s.disconnect();
     };
   }, []);
+
+  // An organizer deleted this player: go back to registration.
+  useEffect(() => {
+    if (error === 'not registered') onLogout();
+  }, [error, onLogout]);
 
   const onDone = useCallback(
     (r: MyResult) => {
@@ -189,13 +197,21 @@ function ArenaView({ me, onLogout }: { me: Me; onLogout: () => void }) {
             <div className="text-sub py-6">You didn't play this round.</div>
           )}
           {res.kind === 'rolling' && <div className="text-sub text-sm mt-5">Next round starting in a few seconds…</div>}
-          {res.kind === 'final' && <div className="text-main text-sm mt-5">Winners will be announced on stage!</div>}
+          {res.kind === 'final' && <div className="text-main text-sm mt-5">Winners are revealed on the big screen!</div>}
         </div>
-        <Leaderboard
-          title={res.kind === 'final' ? 'Final standings' : `Round ${res.number} · top ${res.top.length} of ${res.count}`}
-          entries={res.top}
-          highlight={me.username}
-        />
+        {res.kind === 'final' && res.top.length === 0 && res.count > 0 ? (
+          <div className="rounded-2xl bg-surface border border-line p-6 text-center">
+            <div className="text-main uppercase tracking-[0.2em] text-xs font-semibold mb-3">Final standings</div>
+            <div className="text-xl font-semibold mb-1">Eyes on the big screen 👀</div>
+            <p className="text-sub text-sm">The standings appear here once the winners have been revealed.</p>
+          </div>
+        ) : (
+          <Leaderboard
+            title={res.kind === 'final' ? 'Final standings' : `Round ${res.number} · top ${res.top.length} of ${res.count}`}
+            entries={res.top}
+            highlight={me.username}
+          />
+        )}
       </div>
     );
   } else {
@@ -239,7 +255,7 @@ function ArenaView({ me, onLogout }: { me: Me; onLogout: () => void }) {
           )}
         </div>
         <div className="flex flex-col gap-6">
-          {state.final && <Leaderboard title="Final standings" entries={state.final.top} highlight={me.username} />}
+          {state.final && state.mode !== 'final' && <Leaderboard title="Final standings" entries={state.final.top} highlight={me.username} />}
           <Leaderboard title="Tonight's top typists" entries={state.tonight} highlight={me.username} empty="Be the first on the board!" />
         </div>
       </div>
@@ -248,6 +264,8 @@ function ArenaView({ me, onLogout }: { me: Me; onLogout: () => void }) {
 
   return (
     <div className="min-h-dvh flex flex-col">
+      <Announcement message={state.announcement} />
+      <TouchWarning />
       <header className="flex items-center justify-between gap-4 px-4 sm:px-8 py-4 max-w-6xl w-full mx-auto">
         <Logo eventName={state.eventName} />
         <div className="flex items-center gap-3 text-sm">
